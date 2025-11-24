@@ -1,0 +1,825 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2709
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 <!DOCTYPE html>\
+<html lang="en">\
+<head>\
+  <meta charset="UTF-8">\
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">\
+  <title>Checkerboard Drawing Tool</title>\
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>\
+  <style>\
+    body \{\
+      margin: 0;\
+      padding: 0;\
+      overflow: hidden;\
+    \}\
+    canvas \{\
+      display: block;\
+    \}\
+  </style>\
+</head>\
+<body>\
+  <script>\
+let sizeOptions;\
+let shapeOptions;\
+let redSlider1, greenSlider1, blueSlider1;\
+let redInput1, greenInput1, blueInput1;\
+let redSlider2, greenSlider2, blueSlider2;\
+let redInput2, greenInput2, blueInput2;\
+let shapes = [];\
+let lastDrag = [];\
+let previewSwatch1, previewSwatch2;\
+let toolsBackground;\
+let currentShape = 'square';\
+let uploadedImage;\
+let traceMode = false;\
+let traceOpacity = 0.5;\
+let lastSnapX = -1;\
+let lastSnapY = -1;\
+let lastPositionKey = '';\
+let toolsX = 20;\
+let toolsY = 20;\
+let isCollapsed = false;\
+let contentDiv;\
+let mouseStartedOnTools = false;\
+\
+function setup() \{\
+  pixelDensity(8.0);\
+  \
+  let cnv = createCanvas(windowWidth, windowHeight);\
+  cnv.position(0, 0);\
+  cnv.style('display', 'block');\
+  \
+  colorMode(RGB, 255);\
+\
+  positionElements();\
+\
+  redSlider1.value(0);   redInput1.value('0');\
+  greenSlider1.value(0); greenInput1.value('0');\
+  blueSlider1.value(0);  blueInput1.value('0');\
+  redSlider2.value(180);   redInput2.value('180');\
+  greenSlider2.value(180); greenInput2.value('180');\
+  blueSlider2.value(180);  blueInput2.value('180');\
+\
+  updatePreviewSwatches();\
+\}\
+\
+function positionElements() \{\
+  removeElements();\
+\
+  let innerMargin = 16;\
+\
+  toolsBackground = createDiv('');\
+  toolsBackground.position(toolsX, toolsY + 2);\
+  toolsBackground.style('width', '400px');\
+  toolsBackground.style('background-color', 'white');\
+  toolsBackground.style('border-radius', '4px');\
+  toolsBackground.style('box-shadow', '0 2px 6px rgba(0,0,0,0.15)');\
+  toolsBackground.style('border', '1px solid black');\
+  toolsBackground.style('position', 'absolute');\
+  toolsBackground.style('z-index', '1000');\
+  \
+  toolsBackground.elt.addEventListener('mousedown', (e) => \{\
+    e.stopPropagation();\
+    mouseStartedOnTools = true;\
+  \});\
+  \
+  toolsBackground.elt.addEventListener('mouseup', (e) => \{\
+    e.stopPropagation();\
+  \});\
+  \
+  toolsBackground.elt.addEventListener('mousemove', (e) => \{\
+    e.stopPropagation();\
+  \});\
+  \
+  toolsBackground.elt.addEventListener('click', (e) => \{\
+    e.stopPropagation();\
+  \});\
+\
+  let headerBar = createDiv('\uc0\u9650 ');\
+  headerBar.parent(toolsBackground);\
+  headerBar.style('background-color', '#f0f0f0');\
+  headerBar.style('padding', '8px');\
+  headerBar.style('height', '12px');\
+  headerBar.style('line-height', '12px');\
+  headerBar.style('border-bottom', '1px solid black');\
+  headerBar.style('cursor', 'pointer');\
+  headerBar.style('font-weight', 'bold');\
+  headerBar.style('font-family', 'sans-serif');\
+  headerBar.style('font-size', '8px');\
+  headerBar.style('user-select', 'none');\
+  headerBar.style('text-align', 'left');\
+  headerBar.style('box-sizing', 'border-box');\
+  headerBar.style('display', 'flex');\
+  headerBar.style('align-items', 'center');\
+  \
+  headerBar.mousePressed(() => \{\
+    isCollapsed = !isCollapsed;\
+    if (isCollapsed) \{\
+      contentDiv.style('display', 'none');\
+      headerBar.html('\uc0\u9660 ');\
+      headerBar.style('border-bottom', 'none');\
+      headerBar.style('padding-top', '10px');\
+      toolsBackground.style('width', 'auto');\
+    \} else \{\
+      contentDiv.style('display', 'block');\
+      headerBar.html('\uc0\u9650 ');\
+      headerBar.style('border-bottom', '1px solid black');\
+      headerBar.style('padding-top', '8px');\
+      toolsBackground.style('width', '400px');\
+    \}\
+    return false;\
+  \});\
+\
+  contentDiv = createDiv('');\
+  contentDiv.parent(toolsBackground);\
+  contentDiv.style('padding', '16px');\
+\
+  let shapeText = createP('select shape:');\
+  shapeText.parent(contentDiv);\
+  shapeText.style('margin', '0 0 8px 0');\
+  shapeText.style('font-weight', 'bold');\
+  shapeText.style('font-family', 'sans-serif');\
+  shapeText.style('font-size', '14px');\
+\
+  shapeOptions = createDiv('');\
+  shapeOptions.parent(contentDiv);\
+  shapeOptions.style('display', 'flex');\
+  shapeOptions.style('flex-wrap', 'nowrap');\
+  shapeOptions.style('gap', '4px');\
+  shapeOptions.style('margin-bottom', '42px');\
+\
+  createShapeOption('square', '\uc0\u9632 ');\
+  createShapeOption('hrect2', '\uc0\u9644 ');\
+  createShapeOption('vrect2', '\uc0\u9646 ');\
+  createShapeOption('hrect4', '\uc0\u9644 ');\
+  createShapeOption('vrect4', '\uc0\u9646 ');\
+  createShapeOption('circle', '\uc0\u9679 ');\
+  createShapeOption('triangle', '\uc0\u9698 ');\
+  createShapeOption('triangle2', '\uc0\u9699 ');\
+\
+  let gridSizeText = createP('grid size:');\
+  gridSizeText.parent(contentDiv);\
+  gridSizeText.style('margin', '0 0 8px 0');\
+  gridSizeText.style('font-weight', 'bold');\
+  gridSizeText.style('font-family', 'sans-serif');\
+  gridSizeText.style('font-size', '14px');\
+\
+  sizeOptions = createRadio();\
+  sizeOptions.parent(contentDiv);\
+  sizeOptions.option('2', '2');\
+  sizeOptions.option('4', '4');\
+  sizeOptions.option('8', '8');\
+  sizeOptions.option('16', '16');\
+  sizeOptions.option('32', '32');\
+  sizeOptions.option('64', '64');\
+  sizeOptions.option('128', '128');\
+  sizeOptions.option('256', '256');\
+  sizeOptions.style('display', 'flex');\
+  sizeOptions.style('gap', '10px');\
+  sizeOptions.style('flex-wrap', 'wrap');\
+  sizeOptions.style('margin-bottom', '42px');\
+  sizeOptions.selected('16');\
+  sizeOptions.style('font-size', '12px');\
+  sizeOptions.style('font-family', 'sans-serif');\
+\
+  let color1Text = createP('color 1:');\
+  color1Text.parent(contentDiv);\
+  color1Text.style('margin', '0 0 8px 0');\
+  color1Text.style('font-weight', 'bold');\
+  color1Text.style('font-family', 'sans-serif');\
+  color1Text.style('font-size', '14px');\
+\
+  let color1Container = createDiv('');\
+  color1Container.parent(contentDiv);\
+  color1Container.style('margin-bottom', '42px');\
+  color1Container.style('display', 'flex');\
+  color1Container.style('align-items', 'flex-start');\
+\
+  let color1Sliders = createDiv('');\
+  color1Sliders.parent(color1Container);\
+\
+  [redSlider1, greenSlider1, blueSlider1, redInput1, greenInput1, blueInput1] = createColorControls(color1Sliders, '1');\
+\
+  previewSwatch1 = createDiv('');\
+  previewSwatch1.parent(color1Container);\
+  previewSwatch1.style('width', '40px');\
+  previewSwatch1.style('height', '76px');\
+  previewSwatch1.style('border', '1px solid black');\
+  previewSwatch1.style('margin-left', '10px');\
+  previewSwatch1.style('flex-shrink', '0');\
+\
+  let color1Buttons = createDiv('');\
+  color1Buttons.parent(color1Container);\
+  color1Buttons.style('margin-left', '8px');\
+  color1Buttons.style('display', 'flex');\
+  color1Buttons.style('flex-direction', 'column');\
+  color1Buttons.style('gap', '8px');\
+\
+  createColorPresetButtons(color1Buttons, '1');\
+\
+  let color2Text = createP('color 2:');\
+  color2Text.parent(contentDiv);\
+  color2Text.style('margin', '0 0 8px 0');\
+  color2Text.style('font-weight', 'bold');\
+  color2Text.style('font-family', 'sans-serif');\
+  color2Text.style('font-size', '14px');\
+\
+  let color2Container = createDiv('');\
+  color2Container.parent(contentDiv);\
+  color2Container.style('margin-bottom', '42px');\
+  color2Container.style('display', 'flex');\
+  color2Container.style('align-items', 'flex-start');\
+\
+  let color2Sliders = createDiv('');\
+  color2Sliders.parent(color2Container);\
+\
+  [redSlider2, greenSlider2, blueSlider2, redInput2, greenInput2, blueInput2] = createColorControls(color2Sliders, '2');\
+\
+  previewSwatch2 = createDiv('');\
+  previewSwatch2.parent(color2Container);\
+  previewSwatch2.style('width', '40px');\
+  previewSwatch2.style('height', '76px');\
+  previewSwatch2.style('border', '1px solid black');\
+  previewSwatch2.style('margin-left', '10px');\
+  previewSwatch2.style('flex-shrink', '0');\
+\
+  let color2Buttons = createDiv('');\
+  color2Buttons.parent(color2Container);\
+  color2Buttons.style('margin-left', '8px');\
+  color2Buttons.style('display', 'flex');\
+  color2Buttons.style('flex-direction', 'column');\
+  color2Buttons.style('gap', '8px');\
+\
+  createColorPresetButtons(color2Buttons, '2');\
+\
+  let imageUploadText = createP('image upload:');\
+  imageUploadText.parent(contentDiv);\
+  imageUploadText.style('margin', '0 0 8px 0');\
+  imageUploadText.style('font-weight', 'bold');\
+  imageUploadText.style('font-family', 'sans-serif');\
+  imageUploadText.style('font-size', '14px');\
+\
+  let fileInput = createFileInput(handleFile);\
+  fileInput.parent(contentDiv);\
+  fileInput.style('font-size', '12px');\
+  fileInput.style('font-family', 'sans-serif');\
+  fileInput.style('margin-bottom', '10px');\
+\
+  let traceContainer = createDiv('');\
+  traceContainer.parent(contentDiv);\
+  traceContainer.style('margin-bottom', '42px');\
+\
+  let traceModeCheckbox = createCheckbox('trace mode', false);\
+  traceModeCheckbox.parent(traceContainer);\
+  traceModeCheckbox.style('font-size', '12px');\
+  traceModeCheckbox.style('font-family', 'sans-serif');\
+  traceModeCheckbox.changed(() => \{\
+    traceMode = traceModeCheckbox.checked();\
+  \});\
+\
+  let traceOpacitySlider = createSlider(0, 1, 0.5, 0.01);\
+  traceOpacitySlider.parent(traceContainer);\
+  traceOpacitySlider.style('width', '100px');\
+  traceOpacitySlider.style('margin-left', '10px');\
+  traceOpacitySlider.input(() => \{\
+    traceOpacity = traceOpacitySlider.value();\
+  \});\
+\
+  let traceOpacityLabel = createSpan(' opacity');\
+  traceOpacityLabel.parent(traceContainer);\
+  traceOpacityLabel.style('font-size', '12px');\
+  traceOpacityLabel.style('font-family', 'sans-serif');\
+\
+  let buttonContainer = createDiv('');\
+  buttonContainer.parent(contentDiv);\
+  buttonContainer.style('display', 'flex');\
+  buttonContainer.style('gap', '10px');\
+  buttonContainer.style('flex-wrap', 'wrap');\
+\
+  let undoButton = createButton('undo last move');\
+  undoButton.parent(buttonContainer);\
+  undoButton.mousePressed(undoLastMove);\
+  undoButton.style('font-size', '12px');\
+  undoButton.style('font-family', 'sans-serif');\
+  undoButton.style('padding', '8px 12px');\
+\
+  let downloadButton = createButton('download png');\
+  downloadButton.parent(buttonContainer);\
+  downloadButton.mousePressed(downloadCanvas);\
+  downloadButton.style('font-size', '12px');\
+  downloadButton.style('font-family', 'sans-serif');\
+  downloadButton.style('padding', '8px 12px');\
+\
+  let downloadSVGButton = createButton('download svg');\
+  downloadSVGButton.parent(buttonContainer);\
+  downloadSVGButton.mousePressed(downloadSVG);\
+  downloadSVGButton.style('font-size', '12px');\
+  downloadSVGButton.style('font-family', 'sans-serif');\
+  downloadSVGButton.style('padding', '8px 12px');\
+\
+  updateShapeButtons();\
+\}\
+\
+function createColorControls(parent, suffix) \{\
+  let sliders = [];\
+  let inputs = [];\
+\
+  for (let i = 0; i < 3; i++) \{\
+    let row = createDiv('');\
+    row.parent(parent);\
+    row.style('margin-bottom', '8px');\
+    row.style('display', 'flex');\
+    row.style('align-items', 'center');\
+\
+    sliders[i] = createSlider(0, 255, suffix === '1' ? 0 : 180);\
+    sliders[i].parent(row);\
+    sliders[i].style('width', '150px');\
+\
+    inputs[i] = createInput((suffix === '1' ? 0 : 180).toString());\
+    inputs[i].parent(row);\
+    inputs[i].size(40);\
+    inputs[i].style('margin-left', '10px');\
+    inputs[i].style('font-family', 'sans-serif');\
+    inputs[i].style('height', '20px');\
+    inputs[i].style('box-sizing', 'border-box');\
+  \}\
+\
+  sliders.forEach((slider, index) => \{\
+    slider.input(() => \{\
+      inputs[index].value(slider.value().toString());\
+      updatePreviewSwatches();\
+    \});\
+    inputs[index].input(() => \{\
+      slider.value(int(inputs[index].value()));\
+      updatePreviewSwatches();\
+    \});\
+  \});\
+\
+  return [sliders[0], sliders[1], sliders[2], inputs[0], inputs[1], inputs[2]];\
+\}\
+\
+function createColorPresetButtons(parent, suffix) \{\
+  let blackButton = createButton('B');\
+  blackButton.parent(parent);\
+  blackButton.mousePressed(() => setColorPreset(0, 0, 0, suffix));\
+  blackButton.style('width', '25px');\
+  blackButton.style('height', '20px');\
+  blackButton.style('padding', '0');\
+  blackButton.style('font-family', 'sans-serif');\
+  blackButton.style('font-size', '11px');\
+\
+  let whiteButton = createButton('W');\
+  whiteButton.parent(parent);\
+  whiteButton.mousePressed(() => setColorPreset(255, 255, 255, suffix));\
+  whiteButton.style('width', '25px');\
+  whiteButton.style('height', '20px');\
+  whiteButton.style('padding', '0');\
+  whiteButton.style('font-family', 'sans-serif');\
+  whiteButton.style('font-size', '11px');\
+\
+  let grayButton = createButton('G');\
+  grayButton.parent(parent);\
+  grayButton.mousePressed(() => setColorPreset(180, 180, 180, suffix));\
+  grayButton.style('width', '25px');\
+  grayButton.style('height', '20px');\
+  grayButton.style('padding', '0');\
+  grayButton.style('font-family', 'sans-serif');\
+  grayButton.style('font-size', '11px');\
+\}\
+\
+function setColorPreset(r, g, b, suffix) \{\
+  if (suffix === '1') \{\
+    redSlider1.value(r);   redInput1.value(r);\
+    greenSlider1.value(g); greenInput1.value(g);\
+    blueSlider1.value(b);  blueInput1.value(b);\
+  \} else \{\
+    redSlider2.value(r);   redInput2.value(r);\
+    greenSlider2.value(g); greenInput2.value(g);\
+    blueSlider2.value(b);  blueInput2.value(b);\
+  \}\
+  updatePreviewSwatches();\
+\}\
+\
+function updatePreviewSwatches() \{\
+  let color1 = `rgb($\{redInput1.value()\}, $\{greenInput1.value()\}, $\{blueInput1.value()\})`;\
+  let color2 = `rgb($\{redInput2.value()\}, $\{greenInput2.value()\}, $\{blueInput2.value()\})`;\
+  previewSwatch1.style('background-color', color1);\
+  previewSwatch2.style('background-color', color2);\
+\}\
+\
+function createShapeOption(shape, label) \{\
+  let option = createButton('');\
+  option.parent(shapeOptions);\
+  option.attribute('data-shape', shape);\
+  option.style('width', '40px');\
+  option.style('height', '40px');\
+  option.style('display', 'flex');\
+  option.style('justify-content', 'center');\
+  option.style('align-items', 'center');\
+  option.style('background-color', 'white');\
+  option.style('border', '1px solid black');\
+  option.style('cursor', 'pointer');\
+  option.style('padding', '0');\
+  \
+  let shapeDiv = createDiv(label);\
+  shapeDiv.parent(option);\
+  shapeDiv.style('font-size', '18px');\
+  shapeDiv.style('display', 'flex');\
+  shapeDiv.style('justify-content', 'center');\
+  shapeDiv.style('align-items', 'center');\
+  \
+  if (shape === 'hrect2') \{\
+    shapeDiv.style('width', '24px');\
+    shapeDiv.style('height', '12px');\
+    shapeDiv.style('background-color', 'black');\
+  \} else if (shape === 'vrect2') \{\
+    shapeDiv.style('width', '12px');\
+    shapeDiv.style('height', '24px');\
+    shapeDiv.style('background-color', 'black');\
+  \} else if (shape === 'hrect4') \{\
+    shapeDiv.style('width', '30px');\
+    shapeDiv.style('height', '8px');\
+    shapeDiv.style('background-color', 'black');\
+  \} else if (shape === 'vrect4') \{\
+    shapeDiv.style('width', '8px');\
+    shapeDiv.style('height', '30px');\
+    shapeDiv.style('background-color', 'black');\
+  \} else \{\
+    shapeDiv.html(label);\
+  \}\
+  \
+  option.mousePressed(() => \{\
+    currentShape = shape;\
+    updateShapeButtons();\
+  \});\
+\}\
+\
+function updateShapeButtons() \{\
+  shapeOptions.elt.childNodes.forEach(button => \{\
+    let buttonShape = button.getAttribute('data-shape');\
+    button.style.backgroundColor = buttonShape === currentShape ? '#ddd' : 'white';\
+  \});\
+\}\
+\
+function draw() \{\
+  background(255);\
+  noStroke();\
+\
+  if (traceMode && uploadedImage) \{\
+    push();\
+    tint(255, traceOpacity * 255);\
+    image(uploadedImage, 0, 0, width, height);\
+    pop();\
+  \}\
+\
+  shapes.forEach(shape => \{\
+    fill(shape.color);\
+    drawShape(shape);\
+  \});\
+  \
+  stroke(0);\
+  strokeWeight(1);\
+  noFill();\
+  rect(0, 0, width, height);\
+\}\
+\
+function drawShape(shape) \{\
+  switch(shape.shape) \{\
+    case 'square':\
+      rect(shape.x, shape.y, shape.size, shape.size);\
+      break;\
+    case 'hrect2':\
+      rect(shape.x, shape.y, shape.size * 2, shape.size);\
+      break;\
+    case 'vrect2':\
+      rect(shape.x, shape.y, shape.size, shape.size * 2);\
+      break;\
+    case 'hrect4':\
+      rect(shape.x, shape.y, shape.size * 4, shape.size);\
+      break;\
+    case 'vrect4':\
+      rect(shape.x, shape.y, shape.size, shape.size * 4);\
+      break;\
+    case 'circle':\
+      ellipse(shape.x + shape.size/2, shape.y + shape.size/2, shape.size, shape.size);\
+      break;\
+    case 'triangle':\
+    case 'triangle2':\
+      triangle(\
+        shape.x + shape.trianglePoints[0].x, \
+        shape.y + shape.trianglePoints[0].y,\
+        shape.x + shape.trianglePoints[1].x, \
+        shape.y + shape.trianglePoints[1].y,\
+        shape.x + shape.trianglePoints[2].x, \
+        shape.y + shape.trianglePoints[2].y\
+      );\
+      break;\
+  \}\
+\}\
+\
+function mouseDragged() \{\
+  if (mouseStartedOnTools) \{\
+    return;\
+  \}\
+  \
+  if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;\
+\
+  let currentSize = int(sizeOptions.value());\
+  let color1 = color(redInput1.value(), greenInput1.value(), blueInput1.value());\
+  let color2 = color(redInput2.value(), greenInput2.value(), blueInput2.value());\
+\
+  let snapX, snapY, checkerIndex;\
+\
+  switch(currentShape) \{\
+    case 'square':\
+    case 'circle':\
+      snapX = floor(mouseX / currentSize) * currentSize;\
+      snapY = floor(mouseY / currentSize) * currentSize;\
+      checkerIndex = (floor(snapX / currentSize) + floor(snapY / currentSize)) % 2;\
+      break;\
+    case 'triangle':\
+      snapX = floor(mouseX / currentSize) * currentSize;\
+      snapY = floor(mouseY / currentSize) * currentSize;\
+      let relX = mouseX - snapX;\
+      let relY = mouseY - snapY;\
+      let isBottomLeft = relY > relX;\
+      checkerIndex = (floor(snapX / currentSize) + floor(snapY / currentSize) + (isBottomLeft ? 1 : 0)) % 2;\
+      break;\
+    case 'triangle2':\
+      snapX = floor(mouseX / currentSize) * currentSize;\
+      snapY = floor(mouseY / currentSize) * currentSize;\
+      let relX2 = mouseX - snapX;\
+      let relY2 = mouseY - snapY;\
+      let isBottomRight = relY2 > (currentSize - relX2);\
+      checkerIndex = (floor(snapX / currentSize) + floor(snapY / currentSize) + (isBottomRight ? 1 : 0)) % 2;\
+      break;\
+    case 'hrect2':\
+      snapX = floor(mouseX / (currentSize * 2)) * (currentSize * 2);\
+      snapY = floor(mouseY / currentSize) * currentSize;\
+      checkerIndex = (floor(snapX / (currentSize * 2)) + floor(snapY / currentSize)) % 2;\
+      break;\
+    case 'vrect2':\
+      snapX = floor(mouseX / currentSize) * currentSize;\
+      snapY = floor(mouseY / (currentSize * 2)) * (currentSize * 2);\
+      checkerIndex = (floor(snapX / currentSize) + floor(snapY / (currentSize * 2))) % 2;\
+      break;\
+    case 'hrect4':\
+      snapX = floor(mouseX / (currentSize * 4)) * (currentSize * 4);\
+      snapY = floor(mouseY / currentSize) * currentSize;\
+      checkerIndex = (floor(snapX / (currentSize * 4)) + floor(snapY / currentSize)) % 2;\
+      break;\
+    case 'vrect4':\
+      snapX = floor(mouseX / currentSize) * currentSize;\
+      snapY = floor(mouseY / (currentSize * 4)) * (currentSize * 4);\
+      checkerIndex = (floor(snapX / currentSize) + floor(snapY / (currentSize * 4))) % 2;\
+      break;\
+  \}\
+\
+  let positionKey = (currentShape === 'triangle' || currentShape === 'triangle2') ? \
+    `$\{snapX\},$\{snapY\},$\{currentShape\},$\{mouseX - snapX > mouseY - snapY ? 'top' : 'bottom'\}` : \
+    `$\{snapX\},$\{snapY\}`;\
+    \
+  if (snapX !== lastSnapX || snapY !== lastSnapY || positionKey !== lastPositionKey) \{\
+    let chosenColor = checkerIndex === 0 ? color1 : color2;\
+\
+    let shapeData = \{\
+      shape: currentShape,\
+      color: chosenColor,\
+      size: currentSize,\
+      x: snapX,\
+      y: snapY\
+    \};\
+\
+    if (currentShape === 'triangle') \{\
+      let relX = mouseX - snapX;\
+      let relY = mouseY - snapY;\
+      let isBottomLeft = relY > relX;\
+      \
+      if (isBottomLeft) \{\
+        shapeData.trianglePoints = [\
+          \{x: 0, y: 0\},\
+          \{x: 0, y: currentSize\},\
+          \{x: currentSize, y: currentSize\}\
+        ];\
+      \} else \{\
+        shapeData.trianglePoints = [\
+          \{x: 0, y: 0\},\
+          \{x: currentSize, y: 0\},\
+          \{x: currentSize, y: currentSize\}\
+        ];\
+      \}\
+    \} else if (currentShape === 'triangle2') \{\
+      let relX2 = mouseX - snapX;\
+      let relY2 = mouseY - snapY;\
+      let isBottomRight = relY2 > (currentSize - relX2);\
+      \
+      if (isBottomRight) \{\
+        shapeData.trianglePoints = [\
+          \{x: currentSize, y: 0\},\
+          \{x: 0, y: currentSize\},\
+          \{x: currentSize, y: currentSize\}\
+        ];\
+      \} else \{\
+        shapeData.trianglePoints = [\
+          \{x: 0, y: 0\},\
+          \{x: currentSize, y: 0\},\
+          \{x: 0, y: currentSize\}\
+        ];\
+      \}\
+    \}\
+\
+    shapes.push(shapeData);\
+\
+    lastDrag.push(shapes.length - 1);\
+    lastSnapX = snapX;\
+    lastSnapY = snapY;\
+    lastPositionKey = positionKey;\
+  \}\
+\}\
+\
+function mouseReleased() \{\
+  mouseStartedOnTools = false;\
+  \
+  if (lastDrag.length > 0) \{\
+    let sessionShapes = lastDrag.slice();\
+    lastDrag = [];\
+    lastDrag.push(sessionShapes);\
+  \}\
+  lastSnapX = -1;\
+  lastSnapY = -1;\
+  lastPositionKey = '';\
+\}\
+\
+function mousePressed() \{\
+  let toolsRect = toolsBackground.elt.getBoundingClientRect();\
+  \
+  let canvasRect = document.querySelector('canvas').getBoundingClientRect();\
+  let windowMouseX = mouseX + canvasRect.left;\
+  let windowMouseY = mouseY + canvasRect.top;\
+  \
+  if (windowMouseX >= toolsRect.left && windowMouseX <= toolsRect.right &&\
+      windowMouseY >= toolsRect.top && windowMouseY <= toolsRect.bottom) \{\
+    mouseStartedOnTools = true;\
+  \} else \{\
+    mouseStartedOnTools = false;\
+  \}\
+\}\
+\
+function undoLastMove() \{\
+  if (lastDrag.length > 0) \{\
+    let lastSession = lastDrag.pop();\
+    while (lastSession.length) \{\
+      let index = lastSession.pop();\
+      shapes.splice(index, 1);\
+    \}\
+  \}\
+\}\
+\
+function keyPressed() \{\
+  if (key === 'd' || key === 'D') \{\
+    downloadCanvas();\
+  \}\
+  if ((keyCode === 90) && (keyIsDown(CONTROL) || keyIsDown(91) || keyIsDown(93))) \{\
+    undoLastMove();\
+    return false;\
+  \}\
+\}\
+\
+function downloadCanvas() \{\
+  let tempCanvas = createGraphics(width, height);\
+  tempCanvas.background(255);\
+  tempCanvas.noStroke();\
+\
+  shapes.forEach(shape => \{\
+    tempCanvas.fill(shape.color);\
+    drawShapeOnCanvas(tempCanvas, shape);\
+  \});\
+\
+  saveCanvas(tempCanvas, 'drawing', 'png');\
+\}\
+\
+function colorToHex(c) \{\
+  let r = hex(c.levels[0], 2);\
+  let g = hex(c.levels[1], 2);\
+  let b = hex(c.levels[2], 2);\
+  return `#$\{r\}$\{g\}$\{b\}`;\
+\}\
+\
+function downloadSVG() \{\
+  let svgString = `<svg width="$\{width\}" height="$\{height\}" viewBox="0 0 $\{width\} $\{height\}" xmlns="http://www.w3.org/2000/svg">\\n`;\
+  \
+  svgString += `  <rect x="0" y="0" width="$\{width\}" height="$\{height\}" fill="white"/>\\n`;\
+  \
+  shapes.forEach(shape => \{\
+    let hexColor = colorToHex(shape.color);\
+    \
+    let x = shape.x;\
+    let y = shape.y;\
+    let s = shape.size;\
+    \
+    switch(shape.shape) \{\
+      case 'square':\
+        svgString += `  <rect x="$\{x\}" y="$\{y\}" width="$\{s\}" height="$\{s\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'hrect2':\
+        svgString += `  <rect x="$\{x\}" y="$\{y\}" width="$\{s * 2\}" height="$\{s\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'vrect2':\
+        svgString += `  <rect x="$\{x\}" y="$\{y\}" width="$\{s\}" height="$\{s * 2\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'hrect4':\
+        svgString += `  <rect x="$\{x\}" y="$\{y\}" width="$\{s * 4\}" height="$\{s\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'vrect4':\
+        svgString += `  <rect x="$\{x\}" y="$\{y\}" width="$\{s\}" height="$\{s * 4\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'circle':\
+        let cx = x + s / 2;\
+        let cy = y + s / 2;\
+        let r = s / 2;\
+        svgString += `  <circle cx="$\{cx\}" cy="$\{cy\}" r="$\{r\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+      case 'triangle':\
+      case 'triangle2':\
+        let p1x = x + shape.trianglePoints[0].x;\
+        let p1y = y + shape.trianglePoints[0].y;\
+        let p2x = x + shape.trianglePoints[1].x;\
+        let p2y = y + shape.trianglePoints[1].y;\
+        let p3x = x + shape.trianglePoints[2].x;\
+        let p3y = y + shape.trianglePoints[2].y;\
+        svgString += `  <polygon points="$\{p1x\},$\{p1y\} $\{p2x\},$\{p2y\} $\{p3x\},$\{p3y\}" fill="$\{hexColor\}" stroke="none"/>\\n`;\
+        break;\
+    \}\
+  \});\
+\
+  svgString += `</svg>`;\
+\
+  let blob = new Blob([svgString], \{ type: 'image/svg+xml' \});\
+  let url = URL.createObjectURL(blob);\
+  let link = document.createElement('a');\
+  link.href = url;\
+  link.download = 'drawing.svg';\
+  document.body.appendChild(link);\
+  link.click();\
+  document.body.removeChild(link);\
+  URL.revokeObjectURL(url);\
+\}\
+\
+function drawShapeOnCanvas(canvas, shape) \{\
+  switch(shape.shape) \{\
+    case 'square':\
+      canvas.rect(shape.x, shape.y, shape.size, shape.size);\
+      break;\
+    case 'hrect2':\
+      canvas.rect(shape.x, shape.y, shape.size * 2, shape.size);\
+      break;\
+    case 'vrect2':\
+      canvas.rect(shape.x, shape.y, shape.size, shape.size * 2);\
+      break;\
+    case 'hrect4':\
+      canvas.rect(shape.x, shape.y, shape.size * 4, shape.size);\
+      break;\
+    case 'vrect4':\
+      canvas.rect(shape.x, shape.y, shape.size, shape.size * 4);\
+      break;\
+    case 'circle':\
+      canvas.ellipse(shape.x + shape.size/2, shape.y + shape.size/2, shape.size, shape.size);\
+      break;\
+    case 'triangle':\
+    case 'triangle2':\
+      canvas.triangle(\
+        shape.x + shape.trianglePoints[0].x, \
+        shape.y + shape.trianglePoints[0].y,\
+        shape.x + shape.trianglePoints[1].x, \
+        shape.y + shape.trianglePoints[1].y,\
+        shape.x + shape.trianglePoints[2].x, \
+        shape.y + shape.trianglePoints[2].y\
+      );\
+      break;\
+  \}\
+\}\
+\
+function handleFile(file) \{\
+  if (file.type === 'image') \{\
+    loadImage(file.data, img => \{\
+      uploadedImage = createGraphics(width, height);\
+      let scale = Math.min(width / img.width, height / img.height);\
+      let newWidth = img.width * scale;\
+      let newHeight = img.height * scale;\
+      uploadedImage.image(img, (width - newWidth) / 2, (height - newHeight) / 2, newWidth, newHeight);\
+    \});\
+  \}\
+\}\
+\
+function windowResized() \{\
+  resizeCanvas(windowWidth, windowHeight);\
+\}\
+  </script>\
+</body>\
+</html>}
